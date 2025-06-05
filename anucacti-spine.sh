@@ -1,5 +1,4 @@
 #!/bin/bash
-
 set -e
 
 # ========================
@@ -12,7 +11,7 @@ INSTALL_DIR="/var/www/html/cacti"
 SPINE_CONF="/usr/local/spine/etc/spine.conf"
 
 # ========================
-# CLEANUP: Optional Full Reset (if existing)
+# CLEANUP: Optional Full Reset
 # ========================
 echo "⚠️  Skrip ini akan menghapus Apache, PHP, dan MariaDB dari sistem!"
 read -p "Lanjutkan pembersihan dan install ulang dari awal? (y/N): " confirm
@@ -136,8 +135,17 @@ fi
 git clone https://github.com/Cacti/spine.git
 cd spine
 
-# ✅ Patch TINY_BUFSIZE menjadi 64
-sed -i 's/#define TINY_BUFSIZE.*/#define TINY_BUFSIZE 64/' src/php.c
+# ✅ Cari dan patch file php.c
+echo "🔍 Mencari lokasi file php.c untuk patching..."
+PHP_C_FILE=$(find . -type f -name 'php.c' | head -n 1)
+
+if [ -z "$PHP_C_FILE" ]; then
+  echo "❌ File php.c tidak ditemukan. Patch gagal."
+  exit 1
+else
+  echo "✅ Menemukan $PHP_C_FILE. Melakukan patch..."
+  sed -i 's/#define TINY_BUFSIZE.*/#define TINY_BUFSIZE 64/' "$PHP_C_FILE"
+fi
 
 ./bootstrap
 ./configure
