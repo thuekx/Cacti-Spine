@@ -12,6 +12,34 @@ INSTALL_DIR="/var/www/html/cacti"
 SPINE_CONF="/usr/local/spine/etc/spine.conf"
 
 # ========================
+# CLEANUP: Optional Full Reset (if existing)
+# ========================
+echo "⚠️  WARNING: This script will REMOVE existing Apache, PHP, MySQL/MariaDB setups completely."
+read -p "Lanjutkan pembersihan sistem dan install ulang dari awal? (y/N): " confirm
+if [[ "$confirm" =~ ^[Yy]$ ]]; then
+    echo "🧹 Membersihkan instalasi existing..."
+
+    sudo systemctl stop apache2 mariadb || true
+
+    sudo apt purge -y apache2* php* mysql* mariadb* libapache2-mod-php* \
+      php-pear php-dev php-cli php-common php-mysql \
+      php-mbstring php-xml php-gd php-snmp php-curl \
+      php-ldap php-gmp php-intl php-bcmath
+
+    sudo apt autoremove -y
+    sudo apt autoclean
+
+    echo "🗑 Menghapus file konfigurasi dan data..."
+    sudo rm -rf /etc/apache2 /etc/mysql /etc/php /var/lib/mysql /var/www/html/*
+    sudo rm -rf /var/log/apache2 /var/log/mysql /etc/systemd/system/mariadb.service.d
+
+    echo "✅ Sistem dibersihkan. Melanjutkan instalasi fresh..."
+else
+    echo "❌ Proses dibatalkan oleh pengguna."
+    exit 1
+fi
+
+# ========================
 # STEP 1: Update & Install Dependencies
 # ========================
 echo "=== [1/10] Memeriksa dan memasang dependencies..."
