@@ -12,12 +12,12 @@ INSTALL_DIR="/var/www/html/cacti"
 SPINE_CONF="/usr/local/spine/etc/spine.conf"
 
 # ========================
-# CLEANUP: Optional Full Reset (if existing)
+# CLEANUP
 # ========================
-echo "⚠️  WARNING: Skrip ini akan MENGHAPUS semua instalasi Apache, PHP, MySQL/MariaDB yang sudah ada."
-read -p "Lanjutkan pembersihan sistem dan install ulang dari awal? (y/N): " confirm
+echo "⚠️  Skrip ini akan menghapus Apache, PHP, dan MariaDB dari sistem!"
+read -p "Lanjutkan pembersihan dan install ulang dari awal? (y/N): " confirm
 if [[ "$confirm" =~ ^[Yy]$ ]]; then
-    echo "🧹 Membersihkan instalasi existing..."
+    echo "🧹 Membersihkan sistem..."
 
     sudo systemctl stop apache2 mariadb || true
 
@@ -29,11 +29,10 @@ if [[ "$confirm" =~ ^[Yy]$ ]]; then
     sudo apt autoremove -y
     sudo apt autoclean
 
-    echo "🗑 Menghapus file konfigurasi dan data..."
     sudo rm -rf /etc/apache2 /etc/mysql /etc/php /var/lib/mysql /var/www/html/*
     sudo rm -rf /var/log/apache2 /var/log/mysql /etc/systemd/system/mariadb.service.d
 
-    echo "✅ Sistem dibersihkan. Melanjutkan instalasi fresh..."
+    echo "✅ Pembersihan selesai."
 else
     echo "❌ Proses dibatalkan oleh pengguna."
     exit 1
@@ -42,21 +41,20 @@ fi
 # ========================
 # STEP 1: Install Dependencies
 # ========================
-echo "=== [1/10] Menginstal dependencies..."
-REQUIRED_PACKAGES="apache2 mariadb-server php php-mysql php-snmp php-gd php-xml php-mbstring php-curl snmp snmpd rrdtool git build-essential libssl-dev libmariadb-dev librrd-dev libsnmp-dev php-ldap php-gmp php-intl php-bcmath php-cli php-common php-pear php-dev wget unzip autoconf automake libtool xsltproc docbook-xsl docbook-utils"
+echo "🔧 Menginstal dependencies..."
+REQUIRED_PACKAGES="apache2 mariadb-server php php-mysql php-snmp php-gd php-xml php-mbstring php-curl snmp snmpd rrdtool git build-essential libssl-dev libmariadb-dev librrd-dev libsnmp-dev php-ldap php-gmp php-intl php-bcmath php-cli php-common php-pear php-dev wget unzip autoconf automake libtool xsltproc docbook-xsl docbook-utils pkg-config"
 sudo apt update
 sudo apt install -y $REQUIRED_PACKAGES
 
 # ========================
-# STEP 2: Set Hostname
+# STEP 2: Hostname
 # ========================
-echo "=== [2/10] Mengatur hostname: $FQDN"
 sudo hostnamectl set-hostname "$FQDN"
 
 # ========================
 # STEP 3: Konfigurasi MariaDB
 # ========================
-echo "=== [3/10] Konfigurasi database MariaDB..."
+echo "🗃️  Setup database MariaDB..."
 sudo mysql -e "
 DELETE FROM mysql.user WHERE User='';
 DROP DATABASE IF EXISTS test;
@@ -70,13 +68,12 @@ GRANT ALL PRIVILEGES ON cacti.* TO 'cactiuser'@'localhost';
 GRANT SELECT ON mysql.time_zone_name TO 'cactiuser'@'localhost';
 FLUSH PRIVILEGES;"
 
-echo "=== [3.1] Mengimpor data zona waktu ke MySQL..."
 mysql_tzinfo_to_sql /usr/share/zoneinfo | sudo mysql mysql
 
 # ========================
 # STEP 4: Download Cacti
 # ========================
-echo "=== [4/10] Mengunduh Cacti dari GitHub (latest release)..."
+echo "⬇️ Mengunduh Cacti release terbaru..."
 cd /tmp
 LATEST_URL=$(curl -s https://api.github.com/repos/Cacti/cacti/releases/latest | grep "tarball_url" | cut -d '"' -f 4)
 wget -O cacti-latest.tar.gz "$LATEST_URL"
@@ -88,13 +85,11 @@ sudo chown -R www-data:www-data "$INSTALL_DIR"
 # ========================
 # STEP 5: Import Schema
 # ========================
-echo "=== [5/10] Import database schema awal Cacti..."
 sudo mysql cacti < "$INSTALL_DIR/cacti.sql"
 
 # ========================
-# STEP 6: Config PHP Cacti
+# STEP 6: Konfigurasi config.php
 # ========================
-echo "=== [6/10] Mengatur config.php..."
 cp "$INSTALL_DIR/include/config.php.dist" "$INSTALL_DIR/include/config.php"
 sed -i "s/\$database_username = 'cactiuser';/\$database_username = 'cactiuser';/" "$INSTALL_DIR/include/config.php"
 sed -i "s/\$database_password = 'cactiuser';/\$database_password = '$PASSWORD';/" "$INSTALL_DIR/include/config.php"
@@ -102,7 +97,6 @@ sed -i "s/\$database_password = 'cactiuser';/\$database_password = '$PASSWORD';/
 # ========================
 # STEP 7: Apache Setup
 # ========================
-echo "=== [7/10] Menambahkan konfigurasi Apache VirtualHost..."
 sudo tee /etc/apache2/sites-available/cacti.conf > /dev/null <<EOF
 <VirtualHost *:80>
     ServerName $FQDN
@@ -124,18 +118,22 @@ sudo a2enmod rewrite
 sudo systemctl reload apache2
 
 # ========================
-# STEP 8: Setup Cron
+# STEP 8: Cron Job
 # ========================
-echo "=== [8/10] Menambahkan cron untuk poller.php..."
 echo "*/5 * * * * www-data php $INSTALL_DIR/poller.php > /dev/null 2>&1" | sudo tee /etc/cron.d/cacti
 
 # ========================
-# STEP 9: Install Spine dari GitHub
+# STEP 9: Install Spine (GitHub)
 # ========================
-echo "=== [9/10] Menginstal Spine (GitHub)..."
+echo "🐛 Clone Spine dari GitHub dan patch TINY_BUFSIZE..."
 cd /tmp
 git clone https://github.com/Cacti/spine.git
 cd spine
+
+# ✅ Patch TINY_BUFSIZE menjadi 64 (sesuai request)
+sed -i 's/#define TINY_BUFSIZE.*/#define TINY_BUFSIZE 64/' src/php.c
+
+# ✅ Ikuti README GitHub Spine
 ./bootstrap
 ./configure
 make
@@ -144,7 +142,6 @@ sudo make install
 # ========================
 # STEP 10: Konfigurasi Spine
 # ========================
-echo "=== [10/10] Menyiapkan konfigurasi Spine..."
 sudo mkdir -p "$(dirname "$SPINE_CONF")"
 sudo cp spine.conf.dist "$SPINE_CONF"
 sudo sed -i "s/^DB_Password.*/DB_Password     $PASSWORD/" "$SPINE_CONF"
@@ -154,5 +151,5 @@ sudo sed -i "s/^DB_Password.*/DB_Password     $PASSWORD/" "$SPINE_CONF"
 # ========================
 echo ""
 echo "🎉 Instalasi Cacti dan Spine selesai!"
-echo "🌐 Silakan akses di: http://$FQDN"
-echo "🛠 Selesaikan instalasi melalui browser, dan pilih 'Spine' sebagai Poller Engine."
+echo "🌐 Buka browser ke: http://$FQDN"
+echo "🛠 Selesaikan wizard dan pilih 'Spine' sebagai Poller Engine."
