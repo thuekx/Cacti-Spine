@@ -14,7 +14,7 @@ SPINE_CONF="/usr/local/spine/etc/spine.conf"
 # ========================
 # CLEANUP: Optional Full Reset (if existing)
 # ========================
-echo "⚠️  WARNING: This script will REMOVE existing Apache, PHP, MySQL/MariaDB setups completely."
+echo "⚠️  WARNING: Skrip ini akan MENGHAPUS semua instalasi Apache, PHP, MySQL/MariaDB yang sudah ada."
 read -p "Lanjutkan pembersihan sistem dan install ulang dari awal? (y/N): " confirm
 if [[ "$confirm" =~ ^[Yy]$ ]]; then
     echo "🧹 Membersihkan instalasi existing..."
@@ -40,10 +40,10 @@ else
 fi
 
 # ========================
-# STEP 1: Update & Install Dependencies
+# STEP 1: Install Dependencies
 # ========================
-echo "=== [1/10] Memeriksa dan memasang dependencies..."
-REQUIRED_PACKAGES="apache2 mariadb-server php php-mysql php-snmp php-gd php-xml php-mbstring php-curl snmp snmpd rrdtool git build-essential libssl-dev libmariadb-dev librrd-dev libsnmp-dev php-ldap php-gmp php-intl php-bcmath php-cli php-common php-pear php-dev wget unzip"
+echo "=== [1/10] Menginstal dependencies..."
+REQUIRED_PACKAGES="apache2 mariadb-server php php-mysql php-snmp php-gd php-xml php-mbstring php-curl snmp snmpd rrdtool git build-essential libssl-dev libmariadb-dev librrd-dev libsnmp-dev php-ldap php-gmp php-intl php-bcmath php-cli php-common php-pear php-dev wget unzip autoconf automake libtool"
 sudo apt update
 sudo apt install -y $REQUIRED_PACKAGES
 
@@ -54,9 +54,9 @@ echo "=== [2/10] Mengatur hostname: $FQDN"
 sudo hostnamectl set-hostname "$FQDN"
 
 # ========================
-# STEP 3: Konfigurasi MariaDB (tanpa password root)
+# STEP 3: Konfigurasi MariaDB
 # ========================
-echo "=== [3/10] Mengonfigurasi database..."
+echo "=== [3/10] Konfigurasi database MariaDB..."
 sudo mysql -e "
 DELETE FROM mysql.user WHERE User='';
 DROP DATABASE IF EXISTS test;
@@ -74,9 +74,9 @@ echo "=== [3.1] Mengimpor data zona waktu ke MySQL..."
 mysql_tzinfo_to_sql /usr/share/zoneinfo | sudo mysql mysql
 
 # ========================
-# STEP 4: Download Cacti dari GitHub (latest release)
+# STEP 4: Download Cacti
 # ========================
-echo "=== [4/10] Mengunduh Cacti versi terbaru dari GitHub..."
+echo "=== [4/10] Mengunduh Cacti dari GitHub (latest release)..."
 cd /tmp
 LATEST_URL=$(curl -s https://api.github.com/repos/Cacti/cacti/releases/latest | grep "tarball_url" | cut -d '"' -f 4)
 wget -O cacti-latest.tar.gz "$LATEST_URL"
@@ -86,21 +86,21 @@ sudo mv "$EXTRACTED_DIR" "$INSTALL_DIR"
 sudo chown -R www-data:www-data "$INSTALL_DIR"
 
 # ========================
-# STEP 5: Import Database Schema Cacti
+# STEP 5: Import Schema
 # ========================
-echo "=== [5/10] Mengimpor schema awal Cacti ke database..."
+echo "=== [5/10] Import database schema awal Cacti..."
 sudo mysql cacti < "$INSTALL_DIR/cacti.sql"
 
 # ========================
-# STEP 6: Konfigurasi PHP Cacti
+# STEP 6: Config PHP Cacti
 # ========================
-echo "=== [6/10] Mengonfigurasi file config.php..."
+echo "=== [6/10] Mengatur config.php..."
 cp "$INSTALL_DIR/include/config.php.dist" "$INSTALL_DIR/include/config.php"
 sed -i "s/\$database_username = 'cactiuser';/\$database_username = 'cactiuser';/" "$INSTALL_DIR/include/config.php"
 sed -i "s/\$database_password = 'cactiuser';/\$database_password = '$PASSWORD';/" "$INSTALL_DIR/include/config.php"
 
 # ========================
-# STEP 7: Konfigurasi Apache
+# STEP 7: Apache Setup
 # ========================
 echo "=== [7/10] Menambahkan konfigurasi Apache VirtualHost..."
 sudo tee /etc/apache2/sites-available/cacti.conf > /dev/null <<EOF
@@ -124,19 +124,19 @@ sudo a2enmod rewrite
 sudo systemctl reload apache2
 
 # ========================
-# STEP 8: Tambahkan Cron Job Poller
+# STEP 8: Setup Cron
 # ========================
-echo "=== [8/10] Menambahkan cron job untuk polling..."
+echo "=== [8/10] Menambahkan cron untuk poller.php..."
 echo "*/5 * * * * www-data php $INSTALL_DIR/poller.php > /dev/null 2>&1" | sudo tee /etc/cron.d/cacti
 
 # ========================
-# STEP 9: Install Spine Poller
+# STEP 9: Install Spine dari GitHub
 # ========================
-echo "=== [9/10] Menginstal Spine dari source..."
+echo "=== [9/10] Menginstal Spine (GitHub)..."
 cd /tmp
-wget https://www.cacti.net/downloads/spine/cacti-spine-latest.tar.gz
-tar -xzf cacti-spine-latest.tar.gz
-cd cacti-spine-*
+git clone https://github.com/Cacti/spine.git
+cd spine
+./bootstrap
 ./configure
 make
 sudo make install
@@ -144,7 +144,7 @@ sudo make install
 # ========================
 # STEP 10: Konfigurasi Spine
 # ========================
-echo "=== [10/10] Mengonfigurasi Spine..."
+echo "=== [10/10] Menyiapkan konfigurasi Spine..."
 sudo mkdir -p "$(dirname "$SPINE_CONF")"
 sudo cp spine.conf.dist "$SPINE_CONF"
 sudo sed -i "s/^DB_Password.*/DB_Password     $PASSWORD/" "$SPINE_CONF"
@@ -155,4 +155,4 @@ sudo sed -i "s/^DB_Password.*/DB_Password     $PASSWORD/" "$SPINE_CONF"
 echo ""
 echo "🎉 Instalasi Cacti dan Spine selesai!"
 echo "🌐 Silakan akses di: http://$FQDN"
-echo "🛠 Lanjutkan konfigurasi lewat browser, dan pilih 'Spine' sebagai Poller Engine."
+echo "🛠 Selesaikan instalasi melalui browser, dan pilih 'Spine' sebagai Poller Engine."
