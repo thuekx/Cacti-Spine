@@ -10,11 +10,11 @@ INSTALL_DIR="/var/www/html/cacti"
 SPINE_CONF="/usr/local/spine/etc/spine.conf"
 
 # --- UTILITY FUNCTIONS ---
-function check_dependency() {
+check_dependency() {
   echo -n "Checking for $1 ... "
-  if ! command -v $1 >/dev/null 2>&1; then
+  if ! command -v "$1" >/dev/null 2>&1; then
     echo "❌ MISSING"
-    MISSING_PACKAGES+=($2)
+    MISSING_PACKAGES+=("$2")
   else
     echo "✅ FOUND"
   fi
