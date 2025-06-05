@@ -12,7 +12,7 @@ INSTALL_DIR="/var/www/html/cacti"
 SPINE_CONF="/usr/local/spine/etc/spine.conf"
 
 # ========================
-# CLEANUP
+# CLEANUP: Optional Full Reset (if existing)
 # ========================
 echo "⚠️  Skrip ini akan menghapus Apache, PHP, dan MariaDB dari sistem!"
 read -p "Lanjutkan pembersihan dan install ulang dari awal? (y/N): " confirm
@@ -47,7 +47,7 @@ sudo apt update
 sudo apt install -y $REQUIRED_PACKAGES
 
 # ========================
-# STEP 2: Hostname
+# STEP 2: Set Hostname
 # ========================
 sudo hostnamectl set-hostname "$FQDN"
 
@@ -118,22 +118,27 @@ sudo a2enmod rewrite
 sudo systemctl reload apache2
 
 # ========================
-# STEP 8: Cron Job
+# STEP 8: Setup Cron Job
 # ========================
 echo "*/5 * * * * www-data php $INSTALL_DIR/poller.php > /dev/null 2>&1" | sudo tee /etc/cron.d/cacti
 
 # ========================
-# STEP 9: Install Spine (GitHub)
+# STEP 9: Install Spine dari GitHub (dengan patch)
 # ========================
-echo "🐛 Clone Spine dari GitHub dan patch TINY_BUFSIZE..."
+echo "🐛 Mengunduh Spine dari GitHub dan patch TINY_BUFSIZE..."
+
 cd /tmp
+if [ -d "spine" ]; then
+  echo "📂 Direktori spine sudah ada, menghapus lama..."
+  rm -rf spine
+fi
+
 git clone https://github.com/Cacti/spine.git
 cd spine
 
-# ✅ Patch TINY_BUFSIZE menjadi 64 (sesuai request)
+# ✅ Patch TINY_BUFSIZE menjadi 64
 sed -i 's/#define TINY_BUFSIZE.*/#define TINY_BUFSIZE 64/' src/php.c
 
-# ✅ Ikuti README GitHub Spine
 ./bootstrap
 ./configure
 make
@@ -151,5 +156,5 @@ sudo sed -i "s/^DB_Password.*/DB_Password     $PASSWORD/" "$SPINE_CONF"
 # ========================
 echo ""
 echo "🎉 Instalasi Cacti dan Spine selesai!"
-echo "🌐 Buka browser ke: http://$FQDN"
-echo "🛠 Selesaikan wizard dan pilih 'Spine' sebagai Poller Engine."
+echo "🌐 Akses melalui: http://$FQDN"
+echo "🛠 Jalankan wizard setup Cacti dan pilih 'Spine' sebagai Poller Engine."
