@@ -1,8 +1,8 @@
 #!/bin/bash
 
 CONFIG_FILE="/var/www/html/cacti/scripts/graphonu_single.conf"
-tmp_file="/tmp/graphonu_single.tmp"
-log_file="/tmp/graphonu_single.log"
+tmp_file="/var/www/html/cacti/logs/graphonu_single.tmp"
+log_file="/var/www/html/cacti/logs/graphonu_single.log"
 
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "ERROR: Konfigurasi tidak ditemukan. Jalankan setup terlebih dahulu." >&2
@@ -15,6 +15,11 @@ if ! command -v expect >/dev/null 2>&1; then
     echo "❌ 'expect' belum terinstal. Jalankan: sudo apt install expect"
     exit 1
 fi
+
+mkdir -p "/var/www/html/cacti/logs"
+touch "$tmp_file" "$log_file"
+chmod 664 "$tmp_file" "$log_file"
+chown www-data:www-data "$tmp_file" "$log_file"
 
 /usr/bin/expect <<EOF > "$tmp_file"
 spawn telnet $ip
