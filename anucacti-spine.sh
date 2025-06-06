@@ -96,7 +96,8 @@ sudo mysql cacti < "$INSTALL_DIR/cacti.sql"
 cp "$INSTALL_DIR/include/config.php.dist" "$INSTALL_DIR/include/config.php"
 sed -i "s/\$database_username = 'cactiuser';/\$database_username = 'cactiuser';/" "$INSTALL_DIR/include/config.php"
 sed -i "s/\$database_password = 'cactiuser';/\$database_password = '$PASSWORD';/" "$INSTALL_DIR/include/config.php"
-# ✅ Tambahan untuk URL root tanpa /cacti/
+
+✅ Tambahan untuk URL root tanpa /cacti/
 echo "\$url_path = '/';" | sudo tee -a "$INSTALL_DIR/include/config.php" > /dev/null
 
 # ========================
@@ -121,6 +122,7 @@ EOF
 
 # Nonaktifkan site default Apache & aktifkan Cacti
 sudo a2dissite 000-default.conf || true
+sudo rm -f /var/www/html/index.html
 sudo a2ensite cacti
 sudo a2enmod rewrite
 sudo systemctl reload apache2
