@@ -7,7 +7,7 @@ set -e
 USERNAME="usernameanda"
 PASSWORD="isipassword"
 FQDN="namadomain"
-INSTALL_DIR="/var/www/html/cacti"
+INSTALL_DIR="/var/www/html"
 SPINE_CONF="/usr/local/spine/etc/spine.conf"
 
 # ========================
@@ -78,12 +78,16 @@ LATEST_URL=$(curl -s https://api.github.com/repos/Cacti/cacti/releases/latest | 
 wget -O cacti-latest.tar.gz "$LATEST_URL"
 tar -xzf cacti-latest.tar.gz
 EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "Cacti-cacti-*")
-sudo mv "$EXTRACTED_DIR" "$INSTALL_DIR"
+
+# Hapus isi html jika ada dan pindahkan isi Cacti ke /var/www/html
+sudo rm -rf "$INSTALL_DIR"/*
+sudo mv "$EXTRACTED_DIR"/* "$INSTALL_DIR"/
+sudo mv "$EXTRACTED_DIR"/.??* "$INSTALL_DIR"/ 2>/dev/null || true
 sudo chown -R www-data:www-data "$INSTALL_DIR"
 
-# Validasi file utama ada
+# Validasi index.php
 if [ ! -f "$INSTALL_DIR/index.php" ]; then
-    echo "❌ Gagal: file index.php tidak ditemukan di $INSTALL_DIR"
+    echo "❌ index.php tidak ditemukan di $INSTALL_DIR"
     exit 1
 fi
 
@@ -100,10 +104,9 @@ sed -i "s/\$database_username = 'cactiuser';/\$database_username = 'cactiuser';/
 sed -i "s/\$database_password = 'cactiuser';/\$database_password = '$PASSWORD';/" "$INSTALL_DIR/include/config.php"
 
 # ========================
-# STEP 7: Apache Setup (root-based)
+# STEP 7: Apache Setup (direct to root)
 # ========================
 echo "🌐 Mengonfigurasi Apache VirtualHost..."
-sudo mkdir -p "$INSTALL_DIR"
 
 sudo tee /etc/apache2/sites-available/cacti.conf > /dev/null <<EOF
 <VirtualHost *:80>
@@ -122,7 +125,7 @@ sudo tee /etc/apache2/sites-available/cacti.conf > /dev/null <<EOF
 </VirtualHost>
 EOF
 
-# Disable default and enable cacti site
+# Aktifkan site dan reload
 sudo a2dissite 000-default.conf || true
 sudo a2ensite cacti.conf
 sudo a2enmod rewrite
@@ -137,16 +140,14 @@ echo "*/5 * * * * www-data php $INSTALL_DIR/poller.php > /dev/null 2>&1" | sudo 
 # STEP 9: Install Spine dari GitHub (dengan patch)
 # ========================
 echo "🐛 Mengunduh Spine dari GitHub dan patch TINY_BUFSIZE..."
-
 cd /tmp
 rm -rf spine
 git clone https://github.com/Cacti/spine.git
 cd spine
 
-# Cari dan patch php.c
 PHP_C_FILE=$(find . -type f -name 'php.c' | head -n 1)
 if [ -z "$PHP_C_FILE" ]; then
-  echo "❌ File php.c tidak ditemukan."
+  echo "❌ php.c tidak ditemukan."
   exit 1
 else
   sed -i 's/#define TINY_BUFSIZE.*/#define TINY_BUFSIZE 64/' "$PHP_C_FILE"
@@ -175,5 +176,5 @@ sudo sed -i "s/^DB_Password.*/DB_Password     $PASSWORD/" "$SPINE_CONF"
 # ========================
 echo ""
 echo "🎉 Instalasi Cacti dan Spine selesai!"
-echo "🌐 Silakan buka: http://$FQDN"
-echo "🛠 Jalankan wizard dan pilih 'Spine' sebagai Poller Engine."
+echo "🌐 Buka http://$FQDN untuk menjalankan wizard instalasi."
+echo "🛠 Pastikan memilih 'Spine' sebagai Poller Engine."
