@@ -1,72 +1,72 @@
 #!/bin/bash
 
-# ========================
-# Prompt isian variabel
-# ========================
-read -p "Masukkan IP modem/router: " nostek_target
-read -p "Masukkan username login: " nostek_user
-read -sp "Masukkan password login: " nostek_pass
-echo ""
-read -p "Masukkan nama interface (misal ppp0): " nostek_intr
+detect_cacti_script_path() {
+    possible_paths=(
+        "/var/www/html/cacti/scripts"
+        "/usr/share/cacti/scripts"
+        "/var/lib/cacti/scripts"
+        "/opt/cacti/scripts"
+    )
+    for path in "${possible_paths[@]}"; do
+        if [ -d "$path" ] && [ -w "$path" ]; then
+            echo "$path"
+            return 0
+        fi
+    done
+    echo "❌ Tidak bisa mendeteksi path direktori script Cacti."
+    read -rp "Masukkan path manual ke direktori script Cacti: " manual_path
+    if [ ! -d "$manual_path" ]; then
+        echo "🚫 Path tidak valid. Keluar."
+        exit 1
+    fi
+    echo "$manual_path"
+}
 
-# ========================
-# File log dan temp
-# ========================
-nostek_filetmp=/tmp/nostekspeed.tmp
-nostek_filelog=/tmp/nostekspeed.log
+CACTI_SCRIPTS=$(detect_cacti_script_path)
+CONF_FILE="$CACTI_SCRIPTS/nostek_devices.conf"
+LOG_DIR="/var/log/nostek"
+TMP_DIR="/tmp"
 
-# ========================
-# Cek dan install expect jika belum ada
-# ========================
-if ! command -v expect &> /dev/null; then
-  echo "🔧 'expect' belum terpasang. Menginstal..."
-  sudo apt update && sudo apt install -y expect
+mkdir -p "$LOG_DIR"
+
+if [ ! -f "$CONF_FILE" ]; then
+    echo "ERROR: Konfigurasi belum tersedia. Jalankan nostek-setup.sh dulu." >&2
+    exit 1
 fi
 
-# ========================
-# Ambil data via Telnet
-# ========================
-{
-  echo -n "$(date)"
-  expect -c "
-    set timeout 10
-    spawn telnet $nostek_target
-    expect \"*ogin:\"
-    send \"$nostek_user\r\"
-    expect \"*assword:\"
-    send \"$nostek_pass\r\"
-    expect \"*#\"
-    send \"ifconfig $nostek_intr | grep bytes\r\"
-    expect \"*#\"
-    send \"exit\r\"
-    exit
-  "
-} | grep RX | sed -e 's/^       //g' -e 's/:/=/g' >> $nostek_filetmp
+FILTER_NAME="$1"
 
-# ========================
-# Simpan histori 2 baris
-# ========================
-if grep -q RX $nostek_filetmp; then
-  head -1 $nostek_filelog >> $nostek_filetmp
-  cat $nostek_filetmp > $nostek_filelog
-fi
+run_telnet() {
+    local name="$1"
+    local ip="$2"
+    local user="$3"
+    local pass="$4"
 
-# ========================
-# Hitung Bandwidth TX/RX
-# ========================
-if [ "$(wc -l < $nostek_filelog)" = "2" ]; then
-  R2=$(head -1 $nostek_filelog | cut -d'=' -f2 | awk '{print $1}')
-  T2=$(head -1 $nostek_filelog | cut -d'=' -f3 | awk '{print $1}')
-  R1=$(tail -1 $nostek_filelog | cut -d'=' -f2 | awk '{print $1}')
-  T1=$(tail -1 $nostek_filelog | cut -d'=' -f3 | awk '{print $1}')
+    local log_file="$LOG_DIR/nostekspeed_${name}.log"
+    local tmp_file="$TMP_DIR/nostekspeed_${name}.tmp"
 
-  nostek_tbps=$(( (T2 - T1) / 300 ))
-  nostek_rbps=$(( (R2 - R1) / 300 ))
+    /usr/bin/expect <<EOF > "$tmp_file"
+spawn telnet $ip
+expect "Login:"
+send "$user\r"
+expect "Password:"
+send "$pass\r"
+expect "#"
+send "wan show\r"
+expect "#"
+send "exit\r"
+EOF
 
-  [ "$nostek_tbps" -ge 1250000 ] && nostek_tbps=0
-  [ "$nostek_rbps" -ge 1250000 ] && nostek_rbps=0
+    echo "[$(date '+%F %T')] Log $name ($ip)" >> "$log_file"
+    cat "$tmp_file" >> "$log_file"
+    echo -e "\n----------------------------\n" >> "$log_file"
 
-  echo "tx:$nostek_tbps rx:$nostek_rbps"
-else
-  echo "tx:0 rx:0"
-fi
+    echo "✅ Data dari $name disimpan di $tmp_file dan $log_file"
+}
+
+while IFS="|" read -r name ip user pass; do
+    if [ -n "$FILTER_NAME" ] && [ "$FILTER_NAME" != "$name" ]; then
+        continue
+    fi
+    run_telnet "$name" "$ip" "$user" "$pass"
+done < "$CONF_FILE"
