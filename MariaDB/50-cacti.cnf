@@ -1,0 +1,6 @@
+[mysqld]
+collation-server = utf8mb4_unicode_ci
+max_heap_table_size = 256M
+tmp_table_size = 256M
+innodb_buffer_pool_size = 4096M
+innodb_doublewrite = OFF

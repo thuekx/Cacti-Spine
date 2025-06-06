@@ -183,3 +183,20 @@ echo ""
 echo "🎉 Instalasi Cacti dan Spine selesai!"
 echo "🌐 Akses wizard melalui: http://$FQDN/install/"
 echo "🛠 Pilih 'Spine' sebagai Poller Engine saat wizard."
+
+# ========================
+# Konfigurasi MariaDB untuk Cacti
+# ========================
+echo "🛠 Menambahkan konfigurasi MariaDB khusus untuk Cacti..."
+sudo tee /etc/mysql/mariadb.conf.d/50-cacti.cnf > /dev/null <<EOF
+[mysqld]
+collation-server = utf8mb4_unicode_ci
+max_heap_table_size = 256M
+tmp_table_size = 256M
+innodb_buffer_pool_size = 4096M
+innodb_doublewrite = OFF
+
+EOF
+
+# Restart untuk menerapkan perubahan
+sudo systemctl restart mariadb
