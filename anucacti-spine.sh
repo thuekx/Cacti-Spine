@@ -96,19 +96,18 @@ sudo mysql cacti < "$INSTALL_DIR/cacti.sql"
 cp "$INSTALL_DIR/include/config.php.dist" "$INSTALL_DIR/include/config.php"
 sed -i "s/\$database_username = 'cactiuser';/\$database_username = 'cactiuser';/" "$INSTALL_DIR/include/config.php"
 sed -i "s/\$database_password = 'cactiuser';/\$database_password = '$PASSWORD';/" "$INSTALL_DIR/include/config.php"
-
 # ✅ Tambahan untuk URL root tanpa /cacti/
 echo "\$url_path = '/';" | sudo tee -a "$INSTALL_DIR/include/config.php" > /dev/null
 
 # ========================
-# STEP 7: Apache Setup (DocumentRoot langsung ke cacti)
+# STEP 7: Apache Setup (Alias root → cacti)
 # ========================
 sudo tee /etc/apache2/sites-available/cacti.conf > /dev/null <<EOF
 <VirtualHost *:80>
     ServerName $FQDN
-    DocumentRoot /var/www/html/cacti
 
-    <Directory /var/www/html/cacti/>
+    
+    <Directory $INSTALL_DIR/>
         Options +FollowSymLinks
         AllowOverride All
         Require all granted
