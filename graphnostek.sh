@@ -22,6 +22,13 @@ detect_cacti_script_path() {
     echo "$manual_path"
 }
 
+# Check if expect is installed
+if ! command -v expect >/dev/null 2>&1; then
+    echo "❌ Program 'expect' belum terinstall. Silakan install dengan:"
+    echo "   sudo apt update && sudo apt install expect"
+    exit 1
+fi
+
 CACTI_SCRIPTS=$(detect_cacti_script_path)
 CONF_FILE="$CACTI_SCRIPTS/nostek_devices.conf"
 LOG_DIR="/var/log/nostek"
