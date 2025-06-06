@@ -185,11 +185,12 @@ echo "🌐 Akses wizard melalui: http://$FQDN/install/"
 echo "🛠 Pilih 'Spine' sebagai Poller Engine saat wizard."
 
 # ========================
-# Konfigurasi MariaDB untuk Cacti
+# Konfigurasi MariaDB untuk Cacti (UTF8MB4 full compliance)
 # ========================
-echo "🛠 Menambahkan konfigurasi MariaDB khusus untuk Cacti..."
+echo "🛠 Menambahkan konfigurasi MariaDB khusus untuk Cacti (UTF8MB4)..."
 sudo tee /etc/mysql/mariadb.conf.d/50-cacti.cnf > /dev/null <<EOF
 [mysqld]
+character-set-server = utf8mb4
 collation-server = utf8mb4_unicode_ci
 max_heap_table_size = 256M
 tmp_table_size = 256M
