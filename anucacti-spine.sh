@@ -98,13 +98,13 @@ sed -i "s/\$database_username = 'cactiuser';/\$database_username = 'cactiuser';/
 sed -i "s/\$database_password = 'cactiuser';/\$database_password = '$PASSWORD';/" "$INSTALL_DIR/include/config.php"
 
 # ========================
-# STEP 7: Apache Setup (Alias root → cacti)
+# STEP 7: Apache Setup (DocumentRoot langsung ke cacti)
 # ========================
 sudo tee /etc/apache2/sites-available/cacti.conf > /dev/null <<EOF
 <VirtualHost *:80>
     ServerName $FQDN
+    DocumentRoot /var/www/html/cacti
 
-    Alias / /var/www/html/cacti/
     <Directory /var/www/html/cacti/>
         Options +FollowSymLinks
         AllowOverride All
@@ -178,5 +178,5 @@ sudo sed -i "s/^DB_Password.*/DB_Password     $PASSWORD/" "$SPINE_CONF"
 # ========================
 echo ""
 echo "🎉 Instalasi Cacti dan Spine selesai!"
-echo "🌐 Akses wizard melalui: http://$FQDN/cacti/install/"
+echo "🌐 Akses wizard melalui: http://$FQDN/install/"
 echo "🛠 Pilih 'Spine' sebagai Poller Engine saat wizard."
