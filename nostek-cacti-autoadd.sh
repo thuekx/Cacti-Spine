@@ -22,34 +22,30 @@ detect_cacti_script_path() {
     echo "$manual_path"
 }
 
-detect_cacti_cli_path() {
-    local cli_path
-    cli_path=$(find / -type f -name "add_data_input.php" 2>/dev/null | head -n1)
-    if [ -z "$cli_path" ]; then
-        echo "❌ Tidak ditemukan add_data_input.php di sistem!"
-        exit 1
-    fi
-    echo "$(dirname "$cli_path")"
-}
-
-# Path konfigurasi
+# Cari path scripts
 CACTI_SCRIPTS=$(detect_cacti_script_path)
-CACTI_CLI=$(detect_cacti_cli_path)
 CONF_FILE="$CACTI_SCRIPTS/nostek_devices.conf"
+CACTI_CLI="$(dirname "$CACTI_SCRIPTS")/cli"
 DATA_INPUT_NAME="GraphNostek Device Monitor"
 
-echo "✅ Path CLI terdeteksi di: $CACTI_CLI"
+# Validasi CLI Cacti
+if [ ! -d "$CACTI_CLI" ] || [ ! -x "$CACTI_CLI/add_data_input.php" ]; then
+    echo "❌ CLI Cacti tidak ditemukan atau tidak bisa dijalankan: $CACTI_CLI"
+    echo "Pastikan Cacti CLI tersedia dan jalankan skrip ini sebagai root/user yang sesuai."
+    exit 1
+fi
 
 if [ ! -f "$CONF_FILE" ]; then
     echo "ERROR: File konfigurasi tidak ditemukan!"
     exit 1
 fi
 
-# Buat Data Input Method
+# Buat Data Input Method jika belum ada
 php "$CACTI_CLI/add_data_input.php" --name="$DATA_INPUT_NAME"     --type=script     --input-output=1     --script-path="$CACTI_SCRIPTS/graphnostek.sh"     --arg-format=hostname
 
-# Ambil ID Input Method
+# Ambil ID Input Method berdasarkan nama
 input_id=$(php "$CACTI_CLI/add_data_input.php" --list | grep -F "$DATA_INPUT_NAME" | awk '{print $1}')
+
 if [ -z "$input_id" ] || ! [[ "$input_id" =~ ^[0-9]+$ ]]; then
     echo "❌ Gagal mendapatkan ID input method '$DATA_INPUT_NAME'!"
     echo "Silakan periksa manual via:"
