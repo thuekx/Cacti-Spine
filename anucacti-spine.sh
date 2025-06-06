@@ -112,6 +112,8 @@ sudo tee /etc/apache2/sites-available/cacti.conf > /dev/null <<EOF
 </VirtualHost>
 EOF
 
+# ✅ Patch tambahan: nonaktifkan default site agar wizard tampil
+sudo a2dissite 000-default.conf || true
 sudo a2ensite cacti
 sudo a2enmod rewrite
 sudo systemctl reload apache2
@@ -150,7 +152,6 @@ fi
 ./bootstrap
 ./configure
 
-# 🧠 Jika help2man tidak tersedia, gunakan fallback
 if command -v help2man >/dev/null 2>&1; then
   make
   sudo make install
