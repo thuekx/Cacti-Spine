@@ -1,0 +1,33 @@
+# 📦 Archive / hasil unduhan
+*.tar.gz
+*.zip
+
+# 📂 Folder hasil ekstrak / clone
+spine/
+Cacti-*/
+tmp/
+*.bak
+*.tmp
+
+# 📄 File sementara & backup editor
+*~
+*.swp
+*.swo
+
+# ⚙️ File konfigurasi lokal/IDE
+.env
+.env.*
+.vscode/
+.idea/
+
+# 🗂 Log & cache
+*.log
+*.cache
+*.pid
+
+# 💻 OS files
+.DS_Store
+Thumbs.db
+
+# 📤 Output khusus pengguna
+output/
