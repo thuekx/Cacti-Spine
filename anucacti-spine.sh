@@ -41,7 +41,7 @@ fi
 # STEP 1: Install Dependencies
 # ========================
 echo "🔧 Menginstal dependencies..."
-REQUIRED_PACKAGES="apache2 mariadb-server php php-mysql php-snmp php-gd php-xml php-mbstring php-curl snmp snmpd rrdtool git build-essential libssl-dev libmariadb-dev librrd-dev libsnmp-dev php-ldap php-gmp php-intl php-bcmath php-cli php-common php-pear php-dev wget unzip autoconf automake libtool xsltproc docbook-xsl docbook-utils pkg-config"
+REQUIRED_PACKAGES="apache2 mariadb-server php php-mysql php-snmp php-gd php-xml php-mbstring php-curl snmp snmpd rrdtool git build-essential libssl-dev libmariadb-dev librrd-dev libsnmp-dev php-ldap php-gmp php-intl php-bcmath php-cli php-common php-pear php-dev wget unzip autoconf automake libtool xsltproc docbook-xsl docbook-utils pkg-config help2man"
 sudo apt update
 sudo apt install -y $REQUIRED_PACKAGES
 
@@ -149,8 +149,16 @@ fi
 
 ./bootstrap
 ./configure
-make
-sudo make install
+
+# 🧠 Jika help2man tidak tersedia, gunakan fallback
+if command -v help2man >/dev/null 2>&1; then
+  make
+  sudo make install
+else
+  echo "⚠️  help2man tidak ditemukan, melanjutkan build tanpa manpage..."
+  make -k
+  sudo make -k install
+fi
 
 # ========================
 # STEP 10: Konfigurasi Spine
