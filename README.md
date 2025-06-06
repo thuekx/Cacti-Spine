@@ -6,6 +6,7 @@ Skrip `anucacti-spine.sh` ini secara otomatis menginstal dan mengonfigurasi **Ca
 
 ## ✅ Fitur
 
+- Purge instalasi sebelumnya jika ada (Apache, MariadB, PHP)
 - Instalasi otomatis: Apache, MariaDB, PHP, SNMP, RRDTool
 - Setup database dan pengguna `cactiuser`
 - Konfigurasi domain otomatis (`Namadomainanda`)
