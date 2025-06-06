@@ -1,6 +1,4 @@
 #!/bin/bash
-
-# Fungsi untuk mendeteksi path direktori script Cacti
 detect_cacti_script_path() {
     possible_paths=(
         "/var/www/html/cacti/scripts"
@@ -22,25 +20,19 @@ detect_cacti_script_path() {
     fi
     echo "$manual_path"
 }
-
 CACTI_SCRIPTS=$(detect_cacti_script_path)
 SOURCE_SCRIPT="$(dirname "$0")/graphnostek.sh"
 TARGET_SCRIPT="$CACTI_SCRIPTS/graphonu.sh"
-
-# Pastikan file sumber ada
 if [ ! -f "$SOURCE_SCRIPT" ]; then
     echo "❌ File sumber tidak ditemukan: $SOURCE_SCRIPT"
     exit 1
 fi
-
-# Salin file ke direktori Cacti
 cp "$SOURCE_SCRIPT" "$TARGET_SCRIPT"
 chmod +x "$TARGET_SCRIPT"
-
 echo "✅ File berhasil disalin ke: $TARGET_SCRIPT"
 echo "ℹ️  Sekarang Anda bisa menambahkan 'Input Method' secara manual via Web GUI Cacti:"
 echo "    - Name: GraphONU Manual Input"
 echo "    - Type: Script"
 echo "    - Input/Output: Script/Script"
 echo "    - Script Path: $TARGET_SCRIPT"
-echo "    - Input Fields: hostname (isi nama perangkat)"
+echo "    - Input Fields: hostname"
