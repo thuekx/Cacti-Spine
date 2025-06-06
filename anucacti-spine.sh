@@ -2,12 +2,16 @@
 set -e
 
 # ========================
-# KONFIGURASI
+# INPUT USER INTERAKTIF
 # ========================
-USERNAME="usernameanda"
-PASSWORD="isipassword"
-FQDN="namadomain"
-INSTALL_DIR="/var/www/html"
+echo "📋 Masukkan konfigurasi instalasi Cacti"
+
+read -p "🧑  Masukkan nama user sistem (untuk cron): " USERNAME
+read -s -p "🔐 Masukkan password database cactiuser: " PASSWORD
+echo ""
+read -p "🌐 Masukkan domain (FQDN), contoh: cacti.example.com: " FQDN
+
+INSTALL_DIR="/var/www/html/cacti"
 SPINE_CONF="/usr/local/spine/etc/spine.conf"
 
 # ========================
@@ -78,11 +82,7 @@ LATEST_URL=$(curl -s https://api.github.com/repos/Cacti/cacti/releases/latest | 
 wget -O cacti-latest.tar.gz "$LATEST_URL"
 tar -xzf cacti-latest.tar.gz
 EXTRACTED_DIR=$(find . -maxdepth 1 -type d -name "Cacti-cacti-*")
-
-# 🛠️ PATCH: pindahkan isi folder, bukan folder itu sendiri
-sudo rm -rf "$INSTALL_DIR"/*
-sudo mv "$EXTRACTED_DIR"/* "$INSTALL_DIR"/
-sudo mv "$EXTRACTED_DIR"/.??* "$INSTALL_DIR"/ 2>/dev/null || true
+sudo mv "$EXTRACTED_DIR" "$INSTALL_DIR"
 sudo chown -R www-data:www-data "$INSTALL_DIR"
 
 # ========================
@@ -98,14 +98,15 @@ sed -i "s/\$database_username = 'cactiuser';/\$database_username = 'cactiuser';/
 sed -i "s/\$database_password = 'cactiuser';/\$database_password = '$PASSWORD';/" "$INSTALL_DIR/include/config.php"
 
 # ========================
-# STEP 7: Apache Setup
+# STEP 7: Apache Setup (dengan Alias /cacti)
 # ========================
 sudo tee /etc/apache2/sites-available/cacti.conf > /dev/null <<EOF
 <VirtualHost *:80>
     ServerName $FQDN
-    DocumentRoot $INSTALL_DIR
+    DocumentRoot /var/www/html
 
-    <Directory $INSTALL_DIR/>
+    Alias /cacti $INSTALL_DIR
+    <Directory $INSTALL_DIR>
         Options +FollowSymLinks
         AllowOverride All
         Require all granted
@@ -177,5 +178,5 @@ sudo sed -i "s/^DB_Password.*/DB_Password     $PASSWORD/" "$SPINE_CONF"
 # ========================
 echo ""
 echo "🎉 Instalasi Cacti dan Spine selesai!"
-echo "🌐 Akses melalui: http://$FQDN"
-echo "🛠 Jalankan wizard setup Cacti dan pilih 'Spine' sebagai Poller Engine."
+echo "🌐 Akses wizard melalui: http://$FQDN/cacti/install/"
+echo "🛠 Pilih 'Spine' sebagai Poller Engine saat wizard."
