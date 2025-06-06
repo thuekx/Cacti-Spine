@@ -98,15 +98,14 @@ sed -i "s/\$database_username = 'cactiuser';/\$database_username = 'cactiuser';/
 sed -i "s/\$database_password = 'cactiuser';/\$database_password = '$PASSWORD';/" "$INSTALL_DIR/include/config.php"
 
 # ========================
-# STEP 7: Apache Setup (dengan Alias /cacti)
+# STEP 7: Apache Setup (Alias root → cacti)
 # ========================
 sudo tee /etc/apache2/sites-available/cacti.conf > /dev/null <<EOF
 <VirtualHost *:80>
     ServerName $FQDN
-    DocumentRoot /var/www/html
 
-    Alias /cacti $INSTALL_DIR
-    <Directory $INSTALL_DIR>
+    Alias / /var/www/html/cacti/
+    <Directory /var/www/html/cacti/>
         Options +FollowSymLinks
         AllowOverride All
         Require all granted
@@ -118,6 +117,7 @@ sudo tee /etc/apache2/sites-available/cacti.conf > /dev/null <<EOF
 </VirtualHost>
 EOF
 
+# Nonaktifkan site default Apache & aktifkan Cacti
 sudo a2dissite 000-default.conf || true
 sudo a2ensite cacti
 sudo a2enmod rewrite
