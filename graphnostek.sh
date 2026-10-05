@@ -1,87 +1,104 @@
 #!/bin/bash
-detect_cacti_script_path() {
-    possible_paths=(
-        "/var/www/html/cacti/scripts"
-        "/usr/share/cacti/scripts"
-        "/var/lib/cacti/scripts"
-        "/opt/cacti/scripts"
-    )
-    for path in "${possible_paths[@]}"; do
-        if [ -d "$path" ] && [ -w "$path" ]; then
-            echo "$path"
-            return 0
-        fi
-    done
-    echo "❌ Tidak bisa mendeteksi path direktori script Cacti."
-    read -rp "Masukkan path manual ke direktori script Cacti: " manual_path
-    if [ ! -d "$manual_path" ]; then
-        echo "🚫 Path tidak valid. Keluar."
-        exit 1
-    fi
-    echo "$manual_path"
+# Script Data Input Cacti: ambil trafik WAN modem/ONU lewat telnet.
+#
+# Pemakaian : graphnostek.sh <nama_perangkat>
+# Output    : tx:<bit/s> rx:<bit/s>   (U = tidak ada data)
+# Konfigurasi perangkat dibuat oleh nostek-setup.sh.
+
+CONF_FILE=${NOSTEK_CONF:-/etc/cacti-nostek/devices.conf}
+STATE_DIR=${NOSTEK_STATE:-/var/tmp/cacti-nostek}
+export NOSTEK_TIMEOUT=${NOSTEK_TIMEOUT:-10}
+
+fail() {
+    echo "ERROR: $*" >&2
+    echo "tx:U rx:U"
+    exit 0
 }
-if ! command -v expect >/dev/null 2>&1; then
-    echo "❌ Program 'expect' belum terinstall. Jalankan: sudo apt install expect"
-    exit 1
+
+name=$1
+[ -n "$name" ] || { echo "Pemakaian: $0 <nama_perangkat>" >&2; exit 1; }
+
+# Kompatibilitas: lokasi konfigurasi lama di direktori scripts Cacti
+if [ ! -f "$CONF_FILE" ] && [ -f "$(dirname "$0")/nostek_devices.conf" ]; then
+    CONF_FILE="$(dirname "$0")/nostek_devices.conf"
 fi
-CACTI_SCRIPTS=$(detect_cacti_script_path)
-CONF_FILE="$CACTI_SCRIPTS/nostek_devices.conf"
-TMP_DIR="/tmp"
-LOG_DIR="/var/log/nostek"
-mkdir -p "$LOG_DIR"
-if [ ! -f "$CONF_FILE" ]; then
-    echo "ERROR: File konfigurasi tidak tersedia. Jalankan nostek-setup.sh dulu."
-    exit 1
-fi
-FILTER_NAME="$1"
-while IFS="|" read -r name ip user pass mode ifname; do
-    if [ -n "$FILTER_NAME" ] && [ "$FILTER_NAME" != "$name" ]; then
-        continue
-    fi
-    tmp_file="$TMP_DIR/nostekspeed_${name}.tmp"
-    log_file="$LOG_DIR/nostekspeed_${name}.log"
-    # Jalankan expect untuk telnet
-    /usr/bin/expect <<EOF > "$tmp_file"
-spawn telnet $ip
-expect "Login:"
-send "$user\r"
-expect "Password:"
-send "$pass\r"
-expect "#"
-send "[string tolower $mode] == \"ifconfig\" ? \"ifconfig $ifname | grep bytes\" : \"wan show\"\r"
-expect "#"
-send "exit\r"
+
+command -v expect >/dev/null 2>&1 || fail "'expect' belum terinstal (sudo apt install expect telnet)"
+[ -r "$CONF_FILE" ] || fail "konfigurasi $CONF_FILE tidak bisa dibaca, jalankan nostek-setup.sh"
+
+line=$(awk -F'|' -v n="$name" '$1 == n { print; exit }' "$CONF_FILE")
+[ -n "$line" ] || fail "perangkat '$name' tidak ada di $CONF_FILE"
+IFS='|' read -r _ ip user pass mode ifname <<< "$line"
+
+case "$mode" in
+    ifconfig) cmd="ifconfig $ifname" ;;
+    wan)      cmd="wan show" ;;
+    *)        fail "mode '$mode' tidak dikenal (wan/ifconfig)" ;;
+esac
+
+# Kredensial dikirim lewat environment agar karakter khusus aman di Tcl
+output=$(NOSTEK_IP="$ip" NOSTEK_USER="$user" NOSTEK_PASS="$pass" NOSTEK_CMD="$cmd" \
+    expect 2>/dev/null <<'EOF'
+set timeout $env(NOSTEK_TIMEOUT)
+log_user 1
+spawn telnet $env(NOSTEK_IP)
+expect {
+    -re "ogin:|sername:" {}
+    timeout { exit 2 }
+    eof     { exit 2 }
+}
+send -- "$env(NOSTEK_USER)\r"
+expect {
+    "assword:" {}
+    timeout { exit 2 }
+}
+send -- "$env(NOSTEK_PASS)\r"
+expect {
+    -re {[#>$] ?$} {}
+    timeout { exit 3 }
+}
+send -- "$env(NOSTEK_CMD)\r"
+expect {
+    -re {[#>$] ?$} {}
+    timeout { exit 4 }
+}
+send -- "exit\r"
+expect eof
 EOF
-    echo "[$(date '+%F %T')] Output dari $name ($ip)" >> "$log_file"
-    cat "$tmp_file" >> "$log_file"
-    echo -e "\n----------------------------\n" >> "$log_file"
+)
+rc=$?
+output=$(printf '%s\n' "$output" | tr -d '\r')
 
-    if [ "$mode" == "ifconfig" ]; then
-        rx_bytes=$(grep "RX bytes" "$tmp_file" | awk -F'[: ]+' '{print $3}' | head -1)
-        tx_bytes=$(grep "TX bytes" "$tmp_file" | awk -F'[: ]+' '{print $7}' | head -1)
-    else
-        rx_bytes=$(awk -v ifname="$ifname" '$0 ~ ifname && tolower($0) ~ /rx/ { match($0, /[0-9]+[ ]*bps/, a); print a[0] }' "$tmp_file" | grep -Eo '[0-9]+' | head -1)
-        tx_bytes=$(awk -v ifname="$ifname" '$0 ~ ifname && tolower($0) ~ /tx/ { match($0, /[0-9]+[ ]*bps/, a); print a[0] }' "$tmp_file" | grep -Eo '[0-9]+' | head -n1)
+mkdir -p "$STATE_DIR" 2>/dev/null
+safe_name=$(printf '%s' "$name" | tr -c 'A-Za-z0-9._-' '_')
+[ -n "$NOSTEK_DEBUG" ] && printf '%s\n' "$output" > "$STATE_DIR/$safe_name.last"
+
+[ "$rc" -eq 0 ] || fail "telnet/login ke $name ($ip) gagal (kode $rc)"
+
+if [ "$mode" = "ifconfig" ]; then
+    # Format busybox "RX bytes:123" maupun net-tools baru "RX packets 1  bytes 123"
+    rx_bytes=$(printf '%s\n' "$output" | grep -oE 'RX (packets [0-9]+ +)?bytes:? *[0-9]+' | grep -oE '[0-9]+$' | head -n 1)
+    tx_bytes=$(printf '%s\n' "$output" | grep -oE 'TX (packets [0-9]+ +)?bytes:? *[0-9]+' | grep -oE '[0-9]+$' | head -n 1)
+    if [ -z "$rx_bytes" ] || [ -z "$tx_bytes" ]; then
+        fail "counter RX/TX tidak ditemukan di output '$cmd'"
     fi
 
-    rx_bytes=${rx_bytes:-0}
-    tx_bytes=${tx_bytes:-0}
+    now=$(date +%s)
+    state_file="$STATE_DIR/$safe_name.state"
+    prev=$(cat "$state_file" 2>/dev/null)
+    echo "$now $rx_bytes $tx_bytes" > "$state_file"
 
-    echo "$rx_bytes $tx_bytes" >> "$log_file"
-
-    if [ "$(wc -l < "$log_file")" -ge 2 ]; then
-        R2=$(head -1 "$log_file" | awk '{print $1}')
-        T2=$(head -1 "$log_file" | awk '{print $2}')
-        R1=$(tail -1 "$log_file" | awk '{print $1}')
-        T1=$(tail -1 "$log_file" | awk '{print $2}')
-        TBPS=$(( (T2 - T1) / 300 ))
-        RBPS=$(( (R2 - R1) / 300 ))
-        [ "$TBPS" -ge 1250000 ] && TBPS=0
-        [ "$RBPS" -ge 1250000 ] && RBPS=0
-        echo "tx:$TBPS"
-        echo "rx:$RBPS"
-    else
-        echo "tx:0"
-        echo "rx:0"
+    read -r t1 r1 x1 <<< "$prev"
+    if [ -z "$t1" ] || [ "$now" -le "$t1" ] || [ "$rx_bytes" -lt "$r1" ] || [ "$tx_bytes" -lt "$x1" ]; then
+        # Sampel pertama atau counter reset (modem reboot)
+        echo "tx:U rx:U"
+        exit 0
     fi
-done < "$CONF_FILE"
+    elapsed=$(( now - t1 ))
+    echo "tx:$(( (tx_bytes - x1) * 8 / elapsed )) rx:$(( (rx_bytes - r1) * 8 / elapsed ))"
+else
+    # "wan show" sudah menampilkan kecepatan (bps)
+    rx=$(printf '%s\n' "$output" | grep -F -- "$ifname" | grep -i 'rx' | grep -oE '[0-9]+ *bps' | grep -oE '[0-9]+' | head -n 1)
+    tx=$(printf '%s\n' "$output" | grep -F -- "$ifname" | grep -i 'tx' | grep -oE '[0-9]+ *bps' | grep -oE '[0-9]+' | head -n 1)
+    echo "tx:${tx:-U} rx:${rx:-U}"
+fi

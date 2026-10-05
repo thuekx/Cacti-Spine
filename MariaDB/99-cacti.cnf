@@ -1,0 +1,27 @@
+# Contoh tuning MariaDB untuk Cacti (server RAM 16 GB).
+# anucacti-spine.sh membuat file ini otomatis di
+# /etc/mysql/mariadb.conf.d/99-cacti.cnf dengan nilai sesuai RAM server:
+#   innodb_buffer_pool_size = 25% RAM
+#   max_heap_table_size / tmp_table_size = 2% RAM
+# Nama diawali 99- agar tidak ditimpa 50-server.cnf bawaan Ubuntu.
+[mysqld]
+character-set-server = utf8mb4
+collation-server = utf8mb4_unicode_ci
+max_connections = 200
+max_allowed_packet = 16M
+max_heap_table_size = 320M
+tmp_table_size = 320M
+join_buffer_size = 1M
+sort_buffer_size = 1M
+innodb_file_per_table = ON
+innodb_buffer_pool_size = 4096M
+innodb_doublewrite = OFF
+innodb_use_atomic_writes = ON
+innodb_flush_log_at_timeout = 3
+innodb_read_io_threads = 32
+innodb_write_io_threads = 16
+innodb_io_capacity = 5000
+innodb_io_capacity_max = 10000
+
+[client]
+default-character-set = utf8mb4
